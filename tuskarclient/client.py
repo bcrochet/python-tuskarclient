@@ -12,6 +12,17 @@
 
 from tuskarclient.common import auth
 from tuskarclient.openstack.common.apiclient import client as apiclient
+import tuskarclient.openstack.common.cliutils as utils
+
+API_NAME = 'tuskar'
+API_VERSION_OPTION = 'os_tuskar_api_version'
+DEFAULT_TUSKAR_API_VERSION = '2'
+
+# Required by the OSC plugin interface
+
+API_VERSIONS = {
+    '2': 'tuskarclient.v2.client.Client'
+}
 
 VERSION_MAP = {
     '2': 'tuskarclient.v2.client.Client'
@@ -64,3 +75,52 @@ def Client(version, **kwargs):
         endpoint=kwargs.get('endpoint'))
     http_client = apiclient.HTTPClient(keystone_auth)
     return client_class(http_client)
+
+# Required by the OSC plugin interface
+def make_client(instance):
+    """Returns a client to the ClientManager
+
+    Called to instantiate the requested client version.  instance has
+    any available auth info that may be required to prepare the client.
+
+    :param ClientManager instance: The ClientManager that owns the new client
+    """
+    client_class = apiclient.BaseClient.get_class(
+        "%sclient" % API_NAME ,
+        instance._api_version[API_NAME],
+        VERSION_MAP)
+    keystone_auth = auth.KeystoneAuthPlugin(
+        token=instance.auth_ref.token,
+        auth_url=instance.auth_ref.auth_url,
+        endpoint=instance.get_endpoint_for_service_type('management')
+    )
+    http_client = apiclient.HTTPClient(keystone_auth)
+
+    return client_class(http_client)
+
+# Required by the OSC plugin interface
+def build_option_parser(parser):
+    """Hook to add global options
+
+    Called from openstackclient.shell.OpenStackShell.__init__()
+    after the builtin parser has been initialized.  This is
+    where a plugin can add global options such as an API version setting.
+
+    :param argparse.ArgumentParser parser: The parser object that has been
+        initialized by OpenStackShell.
+    """
+    parser.add_argument(
+        '--os-tuskar-api-version',
+        metavar='<tuskar-api-version>',
+        default=utils.env(
+            'OS_TUSKAR_API_VERSION',
+            default=DEFAULT_TUSKAR_API_VERSION),
+        help='OSC Plugin API version, default=' +
+             DEFAULT_TUSKAR_API_VERSION +
+             ' (Env: OS_TUSKAR_API_VERSION)')
+    parser.add_argument(
+        '--tuskar-url',
+        metavar='<tuskar-endpoint-url>',
+        default=utils.env('TUSKAR_URL'),
+        help='Defaults to env[TUSKAR_URL]')
+    return parser
